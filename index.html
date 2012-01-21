@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Catnabbers</title>
+	<script src="jquery-1.7.1.min.js"></script>
+	<script src="jquery.gamequery-0.5.1.js"></script>
+	<link rel="stylesheet" type="text/css" href="reset.css">  
+	<style type="text/css">
+		#playground { border: 1px solid red; background: green;}
+	</style>
+</head>
+<body> 
+<div id="playground"></div>
+<div id="controls">
+	<button id="pause">PAUSE</button>
+</div>
+<script>
+
+var PLAYGROUND_HEIGHT = 320;
+var PLAYGROUND_WIDTH = 480; 
+
+var REFRESH_RATE = 15;
+ 
+	var nyan_walk = new $.gameQuery.Animation({ 
+		imageURL: 'assets/sprite-nyan-walk.png', 
+		numberOfFrame: 7, 
+		delta: 24, 
+		rate: 120, 
+		type: $.gameQuery.ANIMATION_HORIZONTAL
+		});	      
+	
+	var nyan_run = new $.gameQuery.Animation({ 
+		imageURL: 'assets/sprite-nyan-run.png', 
+		numberOfFrame: 6, 
+		delta: 36, 
+		rate: 120, 
+		type: $.gameQuery.ANIMATION_HORIZONTAL
+		});  
+
+
+	//$.playground().addSprite("nyan_walk", { animation: nyan_walk, width: 24, height: 29, posx: PLAYGROUND_WIDTH/4, posy: PLAYGROUND_HEIGHT/4 });   
+	//$.playground().addSprite("nyan_run",  { animation: nyan_run, width: 36, height: 20, posx: PLAYGROUND_WIDTH/2, posy: PLAYGROUND_HEIGHT/2 });
+
+    var cat_sprite = {
+			walk_up: new $.gameQuery.Animation({
+				imageURL: 'assets/sprite-cat-brown.png',
+				numberOfFrame: 3,
+				delta: 32,
+				rate: 120,
+				offsetx: 0,
+				type: $.gameQuery.ANIMATION_HORIZONTAL
+			}),
+			walk_down: new $.gameQuery.Animation({
+				imageURL: 'assets/sprite-cat-brown.png',
+				numberOfFrame: 3,
+				delta: 32,
+				rate: 120,
+				offsetx: 96,
+				type: $.gameQuery.ANIMATION_HORIZONTAL
+			}),
+		    walk_right: new $.gameQuery.Animation({
+				imageURL: 'assets/sprite-cat-brown.png',
+				numberOfFrame: 3,
+				delta: 32,
+				rate: 120,
+				offsetx: 192,
+				type: $.gameQuery.ANIMATION_HORIZONTAL
+			}),
+			walk_left: new $.gameQuery.Animation({
+				imageURL: 'assets/sprite-cat-brown.png',
+				numberOfFrame: 3,
+				delta: 32,
+				rate: 120,
+				offsetx: 288,
+				type: $.gameQuery.ANIMATION_HORIZONTAL
+			}),
+
+		};              
+
+	var cat = function(node) {
+		this.node 			= $(node);
+		this.heading 		= null;
+		this.speed 			= 2; 
+		this.segment_length = 0;
+		this.segment_length_max = 100;
+        this.segment_length_min = 5;    
+
+		this.set_heading = function(heading) {
+			if (heading != this.heading) {
+				this.heading = heading;
+				if (this.heading == 0 ) {
+					this.node.setAnimation(cat_sprite.walk_up);
+				} else if (this.heading == 90) {
+					this.node.setAnimation(cat_sprite.walk_right);
+				} else if (this.heading == 180) {
+					this.node.setAnimation(cat_sprite.walk_down);
+				} else {
+					this.node.setAnimation(cat_sprite.walk_left); 
+				}
+			}
+		};
+
+		this.update = function() {         
+			this.segment_length--;
+			
+			if (this.segment_length <= 0) {
+				this.segment_length = Math.floor(Math.random()*this.segment_length_max)+ this.segment_length_min;
+				this.set_heading( Math.floor(Math.random()*4) * 90 );  
+			}
+			console.log(this.segment_length + " / " + this.heading );
+			
+			var pos = { x: this.node.position().left, y: this.node.position().top };
+
+			if (this.heading == 0 ) {           	//UP
+				pos.y -= this.speed;
+			} else if ( this.heading == 90 ) {      //RIGHT
+				pos.x += this.speed;     
+			} else if ( this.heading == 180 ) {		//DOWN
+				pos.y += this.speed; 
+			} else if ( this.heading == 270 ) {		//LEFT
+				pos.x -= this.speed; 
+			}
+			
+			var out_of_bounds = true;
+			if (pos.x < 0) {
+				this.set_heading(90);   
+			} else if (pos.x > PLAYGROUND_WIDTH) {
+				this.set_heading(270);
+			} else if (pos.y < 0) {
+				this.set_heading(180);
+			} else if (pos.y > PLAYGROUND_HEIGHT) {
+				this.set_heading(0);
+			} else {
+				out_of_bounds = false;
+			}
+			
+			if (out_of_bounds) {
+				console.log("OUT OF BOUNDS");
+				this.update();
+				
+			} else {   
+				this.node.css({ left: pos.x, top: pos.y });
+			}
+		
+		};
+
+	
+	}; 
+	
+   
+
+
+
+	$(document).ready(function() {
+
+	   
+		 $("#playground").playground({height: PLAYGROUND_HEIGHT, width: PLAYGROUND_WIDTH, refreshRate: 30,keyTracker: true}) 
+			   
+			
+		$.playground().addSprite("cat", { animation: cat_sprite.walk_left, width: 32, height: 32, posx: PLAYGROUND_WIDTH*.75, posy: PLAYGROUND_HEIGHT*.75 });
+		$('#cat')[0].controller = new cat($('#cat'));
+		
+		$('#cat')[0].controller.set_heading(0);
+		//MAIN LOOP
+		$.playground().registerCallback(function(){ 
+			
+			if($.gameQuery.keyTracker[65]){ //this is left! (a)
+			    $('#cat')[0].controller.set_heading(270); 
+			}
+	        if($.gameQuery.keyTracker[87]){ //this is up! (w)
+	            $('#cat')[0].controller.set_heading(0);  
+	        }
+	        if($.gameQuery.keyTracker[68]){ //this is right (d)
+			    $('#cat')[0].controller.set_heading(90); 
+	        }
+	        if($.gameQuery.keyTracker[83]){ //this is down! (s)
+			    $('#cat')[0].controller.set_heading(180); 
+	        } 
+	
+			$('#cat')[0].controller.update();
+			
+		}, REFRESH_RATE); 
+		
+		
+		// START GAME	
+		$.playground().startGame(function(){}); 
+			
+	});
+</script>	
+</body>
+</html>
