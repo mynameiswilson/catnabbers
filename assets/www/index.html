@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Catnabbers</title>
+	<script src="jquery-1.7.1.min.js"></script>
+	<script src="jquery.gamequery-0.5.1.js"></script>
+	<link rel="stylesheet" type="text/css" href="reset.css">  
+	<style type="text/css">      
+		body { font-family: sans-serif; }
+		#welcome { background: rgba(0,0,0,0.8); }
+		#welcome h1 { 
+			font: bold normal 4rem/1em sans-serif; 
+			color: #fff; 
+			width: 100%; 
+			text-align: center;   
+			letter-spacing: .2em;
+		}
+		
+		
+		#playground { background: green;}  
+		
+		#todo {
+			background: rgba(0,0,0,0.8);
+			font: bold normal 4rem/1em sans-serif; 
+			color: #fff;
+			position: absolute; 
+			z-index: 99;
+			width: auto;
+			text-align: center;
+			opacity: 0;     
+			
+		}
+		
+		#todo .text { margin: 1em 2em; }
+		
+		#hud {
+			background: rgba(0,0,0,0.8);
+			position: absolute;
+			bottom: 0;
+			left: 0;
+			display: none;
+			color: white; 
+			z-index: 99;   
+			font-size: 2rem;
+			padding: .5em 1em;
+		}
+		#video { position: absolute; z-index: 99; border: 1px solid #f00; display: none;}
+		#video iframe { width: 100%; height: 100%;} 
+		#controls { position: absolute; z-index: 99;}
+	</style>
+</head>
+<body>  
+<div id="welcome">
+	<h1>Catnabbers!</h1>
+</div>        
+<div id="todo">
+	
+	<div class="text">
+	Catch<br/>
+	<span id="cats_nab_goal">0</span><br/>
+	Cats!
+	</div>
+</div>                  
+
+<div id="hud">
+	Cats to nab: <span id="cats_to_nab"></span>
+</div>
+
+<div id="playground"></div> 
+<div id="video"></div>
+<div id="controls">
+	<button id="pause">PAUSE</button>
+</div>
+<script> 
+	(function($){
+	    $.fn.extend({
+	        center: function () {
+	            return this.each(function() {
+	                var top = ($(window).height() - $(this).outerHeight(true)) / 2;
+	                var left = ($(window).width() - $(this).outerWidth(true)) / 2;
+	                $(this).css({position:'absolute', margin:0, top: (top > 0 ? top : 0)+'px', left: (left > 0 ? left : 0)+'px'});
+	            });
+	        }
+	    }); 
+	})(jQuery);
+
+	var PLAYGROUND_HEIGHT 	= 320;
+	var PLAYGROUND_WIDTH 	= 480; 
+	var REFRESH_RATE 		= 15;
+	var VIDEO_PLAYER_SIZE	= .75;
+	var gameStatus = "stopped"; //"running", "paused"
+    var videoRatio = 1.777778;
+
+	var CATS_NAB_GOAL		= 3; 
+	var CATS_NABBED			= 3;			
+
+	/*var nyan_walk = new $.gameQuery.Animation({ 
+		imageURL: 'assets/sprite-nyan-walk.png', 
+		numberOfFrame: 7, 
+		delta: 24, 
+		rate: 120, 
+		type: $.gameQuery.ANIMATION_HORIZONTAL
+		});	      
+	
+	var nyan_run = new $.gameQuery.Animation({ 
+		imageURL: 'assets/sprite-nyan-run.png', 
+		numberOfFrame: 6, 
+		delta: 36, 
+		rate: 120, 
+		type: $.gameQuery.ANIMATION_HORIZONTAL
+		}); */
+	//$.playground().addSprite("nyan_walk", { animation: nyan_walk, width: 24, height: 29, posx: PLAYGROUND_WIDTH/4, posy: PLAYGROUND_HEIGHT/4 });   
+	//$.playground().addSprite("nyan_run",  { animation: nyan_run, width: 36, height: 20, posx: PLAYGROUND_WIDTH/2, posy: PLAYGROUND_HEIGHT/2 });
+    
+	var videos = [
+		"http://www.youtube.com/embed/EQ1HKCYJM5U"
+	]; 
+	
+	var videoOptions = "?rel=0&modestbranding=1&controls=0&autoplay=1";
+
+    var cat_sprites = {
+		walk_up: new $.gameQuery.Animation({
+			imageURL: 'assets/sprite-cat-brown.png',
+			numberOfFrame: 3,
+			delta: 32,
+			rate: 120,
+			offsetx: 0,
+			type: $.gameQuery.ANIMATION_HORIZONTAL
+		}),
+		walk_down: new $.gameQuery.Animation({
+			imageURL: 'assets/sprite-cat-brown.png',
+			numberOfFrame: 3,
+			delta: 32,
+			rate: 120,
+			offsetx: 96,
+			type: $.gameQuery.ANIMATION_HORIZONTAL
+		}),
+	    walk_right: new $.gameQuery.Animation({
+			imageURL: 'assets/sprite-cat-brown.png',
+			numberOfFrame: 3,
+			delta: 32,
+			rate: 120,
+			offsetx: 192,
+			type: $.gameQuery.ANIMATION_HORIZONTAL
+		}),
+		walk_left: new $.gameQuery.Animation({
+			imageURL: 'assets/sprite-cat-brown.png',
+			numberOfFrame: 3,
+			delta: 32,
+			rate: 120,
+			offsetx: 288,
+			type: $.gameQuery.ANIMATION_HORIZONTAL
+		}),
+
+	}; 
+		
+	             
+
+	var cat = function(node) {
+		this.node 				= $(node);
+		this.heading 			= null;
+		this.speed 				= 2; 
+		this.segment_length 	= 0;
+		this.segment_length_max = 100;
+        this.segment_length_min = 5;
+ 		this.caught 			= false;
+		var me = this;
+
+		this.node.click(function(e) {
+			console.log("cat click");
+			me.caught = true; 	
+			console.log(me.caught);
+		});
+
+		this.set_heading = function(heading) {
+			if (heading != this.heading) {
+				this.heading = heading;
+				if (this.heading == 0 ) {
+					this.node.setAnimation(cat_sprites.walk_up);
+				} else if (this.heading == 90) {
+					this.node.setAnimation(cat_sprites.walk_right);
+				} else if (this.heading == 180) {
+					this.node.setAnimation(cat_sprites.walk_down);
+				} else {
+					this.node.setAnimation(cat_sprites.walk_left); 
+				}
+			}
+		};
+        this.set_position = function (pos) {  
+			if (typeof pos == "object") {   
+				                              
+				/*console.log(pos.x + ", " + pos.y); */   
+			    var x = (pos.hasOwnProperty("x")) ? pos.x : this.node.position().left;  
+		        var y = (pos.hasOwnProperty("y")) ? pos.y : this.node.position().top;  
+	    		//this.node.css({ left: x, top: y });  
+	
+				this.node.css({ left: x, top: y });
+			}
+	    	
+		}
+		this.update = function() {
+			// each step         
+			this.segment_length--; 
+			
+			
+			//if we're at the end of this segment
+			if (this.segment_length <= 0) {      
+				//choose another segment length and heading
+				this.segment_length = Math.floor(Math.random()*this.segment_length_max)+ this.segment_length_min;
+				this.set_heading( Math.floor(Math.random()*4) * 90 );  
+			}
+			
+			var pos = { x: this.node.position().left, y: this.node.position().top };
+            
+
+			//handle next step and out of bounds
+			if (this.heading == 0 ) {           	//UP   
+				
+				pos.y -= this.speed;                    
+				if (pos.y <= 0) {
+					this.set_heading(180);      
+					pos.y = 0   
+				}     
+				
+			} else if ( this.heading == 90 ) {      //RIGHT
+				pos.x += this.speed;
+				
+				if (pos.x + this.node.width() >= PLAYGROUND_WIDTH) {                         
+					this.set_heading(270); 
+					pos.x = PLAYGROUND_WIDTH - this.node.width(); 
+				}
+				
+			} else if ( this.heading == 180 ) {		//DOWN  
+				
+				pos.y += this.speed;  
+				if (pos.y + this.node.height() >= PLAYGROUND_HEIGHT) { 
+					this.set_heading(0);
+					pos.y = PLAYGROUND_HEIGHT - this.node.height();
+				}  
+				
+			} else if ( this.heading == 270 ) {		//LEFT
+				pos.x -= this.speed;
+				 
+			    if (pos.x <= 0) {
+					this.set_heading(90);
+					pos.x = 0;
+				}
+			}
+			
+		    //walk to next step
+			this.set_position(pos);  
+			
+		
+		}; //update
+		
+	}; 
+	
+	var show_todo = function() {
+		//SHOW TODO SCREEN 
+	   
+		$('#todo').animate({ opacity: 1, duration: 500}, function() { 
+			$(this).one("click",function() { 
+				$(this).animate( { opacity: 0 }, function() {
+					gameStatus = "running";
+					$('#hud').fadeIn();
+				});
+				 
+			})
+		});
+	};
+	
+	var reset_game = function() {
+		CATS_TO_NAB = Math.floor(Math.random()*3);
+		CATS_NABBED = 0;
+		$('#cats_nab_goal,#cats_to_nab').html(CATS_NAB_GOAL);  
+		gameStatus = "paused";
+		show_todo();
+	};
+	
+    var load_video = function() { 
+		$('#video').show();
+		$('#video iframe').attr("src", videos[0] + videoOptions); 
+		$('#playground').one("click",function() { 
+			$('#video iframe').attr("src","#"); 
+			$('#video').hide();                   
+			reset_game();
+		})
+		
+	};
+	
+    var rsz = function() { 
+		PLAYGROUND_WIDTH = $(window).width();
+		PLAYGROUND_HEIGHT = $(window).height(); 
+		$('#welcome')
+			.width(PLAYGROUND_WIDTH)
+			.height(PLAYGROUND_HEIGHT);
+		
+		$('#welcome h1').center();	
+			
+		$('#video')
+			.width( PLAYGROUND_WIDTH * VIDEO_PLAYER_SIZE )
+			.height( (PLAYGROUND_WIDTH * VIDEO_PLAYER_SIZE ) / videoRatio )
+			.center();
+	};
+    $(window).resize(rsz);
+
+	$(document).ready(function() { 
+		
+		rsz();
+		
+		$('#video').append("<iframe src=\"\" frameborder=\"0\" allowfullscreen></iframe>");
+		
+		
+         $('#pause').click(function() {
+	        	if ( gameStatus != "stopped") {
+		        	gameStatus = (gameStatus == "running") ? "paused" : "running";
+				}
+		 });
+	   
+		$("#playground").playground({height: PLAYGROUND_HEIGHT, width: PLAYGROUND_WIDTH, refreshRate: 30,keyTracker: true}) 
+			   
+		
+		//CREATE OUR CAT	
+		$.playground().addSprite("cat", { animation: cat_sprites.walk_left, 
+			width: 32, height: 32, 
+			posx: PLAYGROUND_WIDTH*.75, 
+			posy: PLAYGROUND_HEIGHT*.75, 
+			geometry: $.gameQuery.GEOMETRY_RECTANGLE
+			});
+			
+		//add our controller object
+		$('#cat')
+			.get(0).controller = new cat($('#cat'));
+		
+		
+		//MAIN LOOP                  
+		
+		$.playground().registerCallback(function(){ 
+			                                        
+			if ( gameStatus == "running" ) {
+			                                       
+				//KEY HANDLERS FOR DEBUGGING AND CONTROL
+				if($.gameQuery.keyTracker[65]){ //this is left! (a)
+					$('#cat')[0].controller.set_heading(270); 
+				}
+				if($.gameQuery.keyTracker[87]){ //this is up! (w)
+					$('#cat')[0].controller.set_heading(0);  
+				}
+				if($.gameQuery.keyTracker[68]){ //this is right (d)
+					$('#cat')[0].controller.set_heading(90); 
+				}
+				if($.gameQuery.keyTracker[83]){ //this is down! (s)
+					$('#cat')[0].controller.set_heading(180); 
+				} 
+
+				$('#cat')[0].controller.update();
+
+				if ( $('#cat')[0].controller.caught == true ) { 
+					
+					$('#cat')[0].controller.caught = false;
+					
+					
+					CATS_NABBED++;
+					$('#cats_to_nab').html( CATS_NAB_GOAL - CATS_NABBED);
+					
+					if (CATS_NAB_GOAL == CATS_NABBED) {
+						gameStatus = "paused"; 
+						$('#hud').fadeOut();
+						load_video();                      
+					}
+				}
+			}
+			
+		}, REFRESH_RATE); 
+		
+		
+		// START GAME 
+		
+		setTimeout( function() {
+		   
+			$.playground().startGame(function(){
+				$('#welcome').fadeOut();  
+				$('#todo').css("display","block").center();
+				
+				reset_game();
+				
+				
+				
+				
+			});                     
+		}, 2000);
+			
+	});
+</script>	
+</body>
+</html>
